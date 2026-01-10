@@ -1,6 +1,7 @@
 package dev.rabauer.voice;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
 import javax.sound.sampled.*;
@@ -20,6 +21,9 @@ public class AudioCaptureService {
     private TargetDataLine line;
     private Thread captureThread;
     private RecorderListener listener;
+
+    @Inject
+    RealtimeOpenAIClient realtimeClient;
 
     @PostConstruct
     public void init() {
@@ -52,6 +56,16 @@ public class AudioCaptureService {
             if (listener != null) {
                 listener.onRecordingStarted();
             }
+            // Connect to OpenAI Realtime and prepare to receive final transcript
+            try {
+                realtimeClient.connect().join();
+                realtimeClient.setOnFinalTranscript(text -> {
+                    log.info("Final transcript received: {}", text);
+                    // Next step: hand to langchain4j adapter and TTS
+                });
+            } catch (Exception e) {
+                log.error("Failed to connect Realtime client", e);
+            }
             ByteArrayOutputStream out = new ByteArrayOutputStream();
 
             captureThread = new Thread(() -> {
@@ -61,8 +75,13 @@ public class AudioCaptureService {
                         int read = line.read(buffer, 0, buffer.length);
                         if (read > 0) {
                             out.write(buffer, 0, read);
+                            // Stream audio chunk to OpenAI Realtime
+                            realtimeClient.appendPcm16(buffer, read);
                         }
                     }
+
+                    // Commit the audio buffer and request a response
+                    realtimeClient.commitAndCreateResponse();
 
                     // On stop: write to temp WAV file
                     byte[] audioBytes = out.toByteArray();
@@ -80,6 +99,11 @@ public class AudioCaptureService {
 
                 } catch (IOException e) {
                     log.error("Error while recording", e);
+                } finally {
+                    // Close realtime connection
+                    try {
+                        realtimeClient.close();
+                    } catch (Exception ignored) {}
                 }
             }, "audio-capture");
 
