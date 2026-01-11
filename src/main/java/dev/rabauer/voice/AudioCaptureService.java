@@ -72,7 +72,27 @@ public class AudioCaptureService {
 
         try {
             line = (TargetDataLine) AudioSystem.getLine(info);
-            log.info("Using audio device: {}", line.getLineInfo());
+            
+            // Try to find which mixer this line came from
+            Mixer.Info[] allMixers = AudioSystem.getMixerInfo();
+            String mixerName = "Unknown";
+            for (Mixer.Info mi : allMixers) {
+                Mixer mixer = AudioSystem.getMixer(mi);
+                if (mixer.isLineSupported(info)) {
+                    try {
+                        Line testLine = mixer.getLine(info);
+                        if (testLine.equals(line) || testLine.getClass().equals(line.getClass())) {
+                            mixerName = mi.getName() + " - " + mi.getDescription();
+                            break;
+                        }
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+                }
+            }
+            
+            log.info("Using audio device: {}", mixerName);
+            log.info("Line info: {}", line.getLineInfo());
             line.open(format);
             log.info("Line opened with buffer size: {} bytes", line.getBufferSize());
             line.start();
@@ -134,8 +154,20 @@ public class AudioCaptureService {
                     }
                     log.info("Captured {} bytes total, {} chunks had non-zero audio data", totalBytes, nonZeroChunks);
 
-                    // Commit the audio buffer and request a response
+                    // Server VAD may have already committed, but we call it anyway to ensure response is created
+                    log.info("About to commit and request response...");
                     realtimeClient.commitAndCreateResponse();
+                    
+                    // Wait for transcript (with timeout)
+                    log.info("Waiting for transcript...");
+                    try {
+                        String transcript = realtimeClient.waitForTranscript().get(10, java.util.concurrent.TimeUnit.SECONDS);
+                        log.info("=== Received transcript from OpenAI: {} ===", transcript);
+                    } catch (java.util.concurrent.TimeoutException e) {
+                        log.warn("Timeout waiting for transcript from OpenAI");
+                    } catch (Exception e) {
+                        log.warn("Error waiting for transcript", e);
+                    }
 
                     // On stop: write to temp WAV file
                     byte[] audioBytes = out.toByteArray();
