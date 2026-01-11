@@ -12,7 +12,7 @@ import java.net.http.HttpResponse;
 @Singleton
 public class TtsPlayer {
 
-    public byte[] requestTtsWav(String text, String voice, String apiKey, String ttsUrl) throws Exception {
+    public byte[] requestTtsWav(String ttsUrl, String apiKey, String text, String voice) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
         // OpenAI TTS API requires: model, input, voice, and optionally response_format
         String payload = "{\"model\":\"tts-1\",\"input\":\"" + text.replace("\"", "\\\"") + "\",\"voice\":\"" + voice + "\",\"response_format\":\"wav\"}";

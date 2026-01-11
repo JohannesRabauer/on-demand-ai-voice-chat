@@ -59,11 +59,13 @@ public class RealtimeOpenAIClient {
                             var transcriptionConfig = mapper.createObjectNode();
                             transcriptionConfig.put("model", "whisper-1");
                             
+                            // Configure server VAD with very long silence detection
+                            // This way transcription happens, but AI won't auto-respond during pauses
                             var turnDetectionConfig = mapper.createObjectNode();
                             turnDetectionConfig.put("type", "server_vad");
-                            turnDetectionConfig.put("threshold", 0.5);
+                            turnDetectionConfig.put("threshold", 0.9);  // High threshold (less sensitive)
                             turnDetectionConfig.put("prefix_padding_ms", 300);
-                            turnDetectionConfig.put("silence_duration_ms", 500);
+                            turnDetectionConfig.put("silence_duration_ms", 30000);  // 30 seconds - won't trigger during normal speech
                             
                             var inputConfig = mapper.createObjectNode();
                             inputConfig.set("format", formatConfig);
@@ -82,7 +84,7 @@ public class RealtimeOpenAIClient {
                             sessionUpdate.set("session", session);
                             
                             webSocket.sendText(sessionUpdate.toString(), true);
-                            log.info("Session update sent: enable input audio transcription (realtime conversation mode)");
+                            log.info("Session update sent: transcription enabled with manual turn control (30s silence threshold)");
                         } catch (Exception e) {
                             log.error("Failed to update session", e);
                         }
@@ -113,10 +115,10 @@ public class RealtimeOpenAIClient {
                         
                         try {
                             JsonNode n = mapper.readTree(json);
-                            log.info("Realtime event: {}", json);
                             
                             if (n.has("type")) {
                                 String eventType = n.get("type").asText();
+                                log.debug("Received event type: {}", eventType);
                                 
                                 // User input audio transcription (what the user said)
                                 if ("conversation.item.input_audio_transcription.completed".equals(eventType)) {
@@ -128,12 +130,35 @@ public class RealtimeOpenAIClient {
                                         onFinalTranscript.accept(transcript);
                                     }
                                 }
+                                // When turn_detection is null, we need to get transcript from conversation.item.created
+                                else if ("conversation.item.created".equals(eventType) || "conversation.item.added".equals(eventType)) {
+                                    log.info("DEBUG: {} event: {}", eventType, json);
+                                    JsonNode item = n.path("item");
+                                    String itemType = item.path("type").asText();
+                                    if ("message".equals(itemType)) {
+                                        String role = item.path("role").asText();
+                                        if ("user".equals(role)) {
+                                            // Check if there's a transcript in the content
+                                            JsonNode content = item.path("content");
+                                            if (content.isArray() && content.size() > 0) {
+                                                for (JsonNode contentPart : content) {
+                                                    if ("input_audio".equals(contentPart.path("type").asText())) {
+                                                        String transcript = contentPart.path("transcript").asText();
+                                                        if (!transcript.isEmpty()) {
+                                                            log.info("=== USER INPUT TRANSCRIPT (from {}) ===", eventType);
+                                                            log.info("You said: {}", transcript);
+                                                            transcriptFuture.complete(transcript);
+                                                            onFinalTranscript.accept(transcript);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 // AI response transcript (what the AI is saying back)
                                 else if ("response.output_audio_transcript.delta".equals(eventType)) {
-                                    String delta = n.path("delta").asText();
-                                    if (!delta.isEmpty()) {
-                                        log.info("AI response delta: {}", delta);
-                                    }
+                                    // Skip logging deltas - too verbose
                                 }
                                 else if ("response.output_audio_transcript.done".equals(eventType)) {
                                     String transcript = n.path("transcript").asText();
@@ -144,24 +169,24 @@ public class RealtimeOpenAIClient {
                                 }
                                 // Speech detection events
                                 else if ("input_audio_buffer.speech_started".equals(eventType)) {
-                                    log.info("Speech detected in audio buffer");
+                                    log.debug("Speech detected in audio buffer");
                                 }
                                 else if ("input_audio_buffer.speech_stopped".equals(eventType)) {
-                                    log.info("Speech stopped in audio buffer");
+                                    log.debug("Speech stopped in audio buffer");
                                 }
                                 // Session events
                                 else if ("session.created".equals(eventType) || "session.updated".equals(eventType)) {
                                     // Log the session config to verify transcription is enabled
                                     JsonNode transcription = n.path("session").path("audio").path("input").path("transcription");
-                                    log.info("Session {}: transcription config = {}", eventType, transcription);
+                                    log.info("Session {}: transcription enabled = {}", eventType, transcription.path("model").asText("none"));
                                 }
                                 // Error handling
                                 else if ("error".equals(eventType)) {
-                                    log.error("OpenAI error: {} - {}", n.path("code").asText(), n.path("message").asText());
+                                    log.error("OpenAI error: {} - {} | Full event: {}", n.path("code").asText(), n.path("message").asText(), json);
                                 }
                             }
                         } catch (Exception e) {
-                            log.warn("Failed to parse realtime message: {}", json, e);
+                            log.warn("Failed to parse realtime message", e);
                         }
                         webSocket.request(1);
                         return CompletableFuture.completedFuture(null);
@@ -230,8 +255,18 @@ public class RealtimeOpenAIClient {
             // Reset the future for new recording
             transcriptFuture = new CompletableFuture<>();
             
+            // First commit the audio buffer
             String commit = mapper.createObjectNode().put("type", "input_audio_buffer.commit").toString();
             socket.sendText(commit, true);
+            
+            // Wait a bit for the commit to process, then create response
+            // The conversation.item.added event will include transcription
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            
             String create = mapper.createObjectNode().put("type", "response.create").toString();
             socket.sendText(create, true);
             

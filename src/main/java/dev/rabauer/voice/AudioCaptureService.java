@@ -36,6 +36,8 @@ public class AudioCaptureService {
     String voice;
     @ConfigProperty(name = "app.tts.url", defaultValue = "https://api.openai.com/v1/audio/speech")
     String ttsUrl;
+    @ConfigProperty(name = "app.whisper.url", defaultValue = "https://api.openai.com/v1/audio/transcriptions")
+    String whisperUrl;
 
     @PostConstruct
     public void init() {
@@ -102,27 +104,7 @@ public class AudioCaptureService {
             if (listener != null) {
                 listener.onRecordingStarted();
             }
-            // Connect to OpenAI Realtime and prepare to receive final transcript
-            try {
-                realtimeClient.connect().join();
-                // Wait for session to be fully initialized before sending audio
-                Thread.sleep(500);
-                log.info("Session initialized, ready to stream audio");
-                realtimeClient.setOnFinalTranscript(text -> {
-                    log.info("Final transcript received: {}", text);
-                    // Hand transcript to langchain adapter
-                    String reply = langchainAdapter.processTranscript(text);
-                    // Request TTS as WAV and play
-                    try {
-                        byte[] wav = ttsPlayer.requestTtsWav(reply, voice, apiKey, ttsUrl);
-                        ttsPlayer.playWav(wav);
-                    } catch (Exception e1) {
-                        log.error("TTS playback failed", e1);
-                    }
-                });
-            } catch (Exception e) {
-                log.error("Failed to connect Realtime client", e);
-            }
+
             ByteArrayOutputStream out = new ByteArrayOutputStream();
 
             captureThread = new Thread(() -> {
@@ -147,29 +129,11 @@ public class AudioCaptureService {
                             if (hasData) {
                                 nonZeroChunks++;
                             }
-                            
-                            // Stream audio chunk to OpenAI Realtime
-                            realtimeClient.appendPcm16(buffer, read);
                         }
                     }
                     log.info("Captured {} bytes total, {} chunks had non-zero audio data", totalBytes, nonZeroChunks);
 
-                    // Server VAD may have already committed, but we call it anyway to ensure response is created
-                    log.info("About to commit and request response...");
-                    realtimeClient.commitAndCreateResponse();
-                    
-                    // Wait for transcript (with timeout)
-                    log.info("Waiting for transcript...");
-                    try {
-                        String transcript = realtimeClient.waitForTranscript().get(10, java.util.concurrent.TimeUnit.SECONDS);
-                        log.info("=== Received transcript from OpenAI: {} ===", transcript);
-                    } catch (java.util.concurrent.TimeoutException e) {
-                        log.warn("Timeout waiting for transcript from OpenAI");
-                    } catch (Exception e) {
-                        log.warn("Error waiting for transcript", e);
-                    }
-
-                    // On stop: write to temp WAV file
+                    // Save to WAV file first
                     byte[] audioBytes = out.toByteArray();
                     Path tmp = Files.createTempFile("recording-", ".wav");
 
@@ -177,19 +141,31 @@ public class AudioCaptureService {
                         AudioInputStream ais = new AudioInputStream(bais, format, audioBytes.length / format.getFrameSize());
                         AudioSystem.write(ais, AudioFileFormat.Type.WAVE, tmp.toFile());
                     }
-
                     log.info("Recording saved to {}", tmp);
-                    if (listener != null) {
-                        listener.onRecordingStopped(tmp.toFile());
+
+                    try {
+                        // Transcribe using Whisper API
+                        log.info("Transcribing audio with Whisper API...");
+                        String transcript = transcribeWithWhisper(tmp);
+                        log.info("=== USER INPUT TRANSCRIPT ===");
+                        log.info("You said: {}", transcript);
+
+                        // Process with LangChain4j
+                        String llmResponse = langchainAdapter.processTranscript(transcript);
+                        
+                        // Convert to speech and play
+                        byte[] audioData = ttsPlayer.requestTtsWav(ttsUrl, apiKey, llmResponse, voice);
+                        ttsPlayer.playWav(audioData);
+
+                        if (listener != null) {
+                            listener.onRecordingStopped(tmp.toFile());
+                        }
+                    } catch (Exception e) {
+                        log.error("Error processing audio with Whisper/LLM/TTS", e);
                     }
 
                 } catch (IOException e) {
                     log.error("Error while recording", e);
-                } finally {
-                    // Close realtime connection
-                    try {
-                        realtimeClient.close();
-                    } catch (Exception ignored) {}
                 }
             }, "audio-capture");
 
@@ -197,6 +173,57 @@ public class AudioCaptureService {
             log.info("Recording started");
         } catch (LineUnavailableException e) {
             log.error("Failed to acquire audio line", e);
+        }
+    }
+
+    private String transcribeWithWhisper(Path audioFile) {
+        try {
+            var client = java.net.http.HttpClient.newHttpClient();
+            var boundary = "----Boundary" + System.currentTimeMillis();
+            
+            // Read audio file
+            byte[] audioBytes = Files.readAllBytes(audioFile);
+            
+            // Build multipart form data
+            var bodyBuilder = new StringBuilder();
+            bodyBuilder.append("--").append(boundary).append("\r\n");
+            bodyBuilder.append("Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n");
+            bodyBuilder.append("Content-Type: audio/wav\r\n\r\n");
+            
+            var headerBytes = bodyBuilder.toString().getBytes();
+            var footerBytes = ("\r\n--" + boundary + "\r\n" +
+                             "Content-Disposition: form-data; name=\"model\"\r\n\r\n" +
+                             "whisper-1\r\n" +
+                             "--" + boundary + "--\r\n").getBytes();
+            
+            // Combine all parts
+            var bodyBytes = new byte[headerBytes.length + audioBytes.length + footerBytes.length];
+            System.arraycopy(headerBytes, 0, bodyBytes, 0, headerBytes.length);
+            System.arraycopy(audioBytes, 0, bodyBytes, headerBytes.length, audioBytes.length);
+            System.arraycopy(footerBytes, 0, bodyBytes, headerBytes.length + audioBytes.length, footerBytes.length);
+            
+            var request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(whisperUrl))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofByteArray(bodyBytes))
+                    .build();
+            
+            var response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            
+            if (response.statusCode() != 200) {
+                log.error("Whisper API error: {} - {}", response.statusCode(), response.body());
+                return "";
+            }
+            
+            // Parse JSON response
+            var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            var jsonNode = mapper.readTree(response.body());
+            return jsonNode.path("text").asText();
+            
+        } catch (Exception e) {
+            log.error("Failed to transcribe with Whisper API", e);
+            return "";
         }
     }
 
