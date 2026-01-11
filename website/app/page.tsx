@@ -126,11 +126,16 @@ export default function Home() {
           >
             <motion.div
               className="mb-8 inline-block"
-              animate={{ rotate: [0, 360] }}
-              transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+              animate={{ y: [0, -20, 0] }}
+              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
             >
-              <div className="w-24 h-24 mx-auto bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center text-5xl shadow-2xl">
-                🎤
+              <div className="relative w-32 h-32 mx-auto">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-purple-600 to-pink-500 rounded-3xl blur-xl opacity-60 animate-pulse-slow"></div>
+                <img 
+                  src="/on-demand-ai-voice-chat/icon-full.png" 
+                  alt="VoiceAI Commander" 
+                  className="relative w-full h-full rounded-3xl shadow-2xl"
+                />
               </div>
             </motion.div>
 
