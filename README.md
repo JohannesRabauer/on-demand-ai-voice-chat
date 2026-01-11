@@ -6,6 +6,8 @@
 
 A Quarkus-based Windows tray application that records audio via global hotkey, transcribes it using OpenAI Whisper API, processes responses through GPT-4 with langchain4j, and plays TTS audio back.
 
+> **🌐 [Visit the Official Website](https://JohannesRabauer.github.io/on-demand-ai-voice-chat/)** for a beautiful overview of features and capabilities!
+
 ## 📥 Download
 
 **Latest Release**: [Download OnDemandAIVoice-Portable-Windows.zip](../../releases/latest)
