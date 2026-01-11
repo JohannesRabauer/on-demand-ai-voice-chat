@@ -75,17 +75,51 @@ app.hotkey=F8
 
 # OpenAI
 openai.api.key=${OPENAI_API_KEY}
-openai.realtime.url=wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview
 app.tts.url=https://api.openai.com/v1/audio/speech
 app.voice=alloy
 
 # AI
 app.systemPrompt=You are a helpful assistant.
+app.llm.model=gpt-4o
+app.contextMemory.enabled=true
 
 # Audio
-app.audio.sampleRate=16000
+app.audio.sampleRate=24000
 app.audio.channels=1
 app.audio.sampleSizeInBits=16
+
+# Audio device selection (leave empty to use Windows default devices)
+# Set partial device name to use specific device (e.g., "Yeti", "Realtek", "USB Audio")
+app.audio.inputDevice=
+app.audio.outputDevice=
+```
+
+### Audio Device Selection
+
+**Tray Menu (Recommended):**
+1. Right-click the tray icon
+2. Select "Input Device" or "Output Device" 
+3. Choose your preferred device or "System Default"
+4. Changes take effect immediately - no restart needed
+
+**Configuration File (Alternative):**
+
+Edit the properties above to pre-configure devices. The tray menu shows all available devices and marks the currently selected one with a checkmark.
+
+**To find your device names:**
+Run the application once and check the logs - it will list all available input devices at startup.
+
+**Example device configurations:**
+```properties
+# Use Yeti microphone for input
+app.audio.inputDevice=Yeti
+
+# Use specific Realtek output
+app.audio.outputDevice=Realtek
+
+# Use USB headset for both
+app.audio.inputDevice=USB Audio
+app.audio.outputDevice=USB Audio
 ```
 
 ## Architecture

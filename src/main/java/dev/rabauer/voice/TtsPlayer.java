@@ -1,6 +1,9 @@
 package dev.rabauer.voice;
 
 import jakarta.inject.Singleton;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.sound.sampled.*;
 import java.io.ByteArrayInputStream;
@@ -8,9 +11,23 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.Optional;
 
 @Singleton
 public class TtsPlayer {
+    private static final Logger log = LoggerFactory.getLogger(TtsPlayer.class);
+
+    @ConfigProperty(name = "app.audio.outputDevice")
+    Optional<String> outputDeviceName;
+
+    public void setOutputDevice(String deviceName) {
+        this.outputDeviceName = Optional.ofNullable(deviceName);
+        log.info("Output device changed to: {}", deviceName != null ? deviceName : "system default");
+    }
+
+    public Optional<String> getOutputDevice() {
+        return outputDeviceName;
+    }
 
     public byte[] requestTtsWav(String ttsUrl, String apiKey, String text, String voice) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
@@ -34,7 +51,34 @@ public class TtsPlayer {
              AudioInputStream ais = AudioSystem.getAudioInputStream(bais)) {
             AudioFormat format = ais.getFormat();
             DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
-            try (SourceDataLine line = (SourceDataLine) AudioSystem.getLine(info)) {
+            
+            // Find configured output device or use default
+            Mixer selectedMixer = null;
+            if (outputDeviceName.isPresent()) {
+                Mixer.Info[] mixers = AudioSystem.getMixerInfo();
+                for (Mixer.Info mixerInfo : mixers) {
+                    if (mixerInfo.getName().contains(outputDeviceName.get())) {
+                        Mixer mixer = AudioSystem.getMixer(mixerInfo);
+                        if (mixer.isLineSupported(info)) {
+                            selectedMixer = mixer;
+                            log.info("Using configured audio output device: {}", mixerInfo.getName());
+                            break;
+                        }
+                    }
+                }
+                if (selectedMixer == null) {
+                    log.warn("Configured output device '{}' not found or not supported, using system default", outputDeviceName.get());
+                }
+            }
+            
+            SourceDataLine line;
+            if (selectedMixer != null) {
+                line = (SourceDataLine) selectedMixer.getLine(info);
+            } else {
+                line = (SourceDataLine) AudioSystem.getLine(info);
+            }
+            
+            try (line) {
                 line.open(format);
                 line.start();
                 byte[] buffer = new byte[4096];

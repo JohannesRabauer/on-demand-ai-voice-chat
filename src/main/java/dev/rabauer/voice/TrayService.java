@@ -8,6 +8,8 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Mixer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +26,9 @@ public class TrayService implements RecorderListener {
 
     @Inject
     LangchainAdapter langchainAdapter;
+
+    @Inject
+    TtsPlayer ttsPlayer;
 
     private TrayIcon trayIcon;
     private MenuItem recordMenuItem;
@@ -75,6 +80,14 @@ public class TrayService implements RecorderListener {
                 }
             });
 
+            // Input device selection menu
+            Menu inputDeviceMenu = new Menu("Input Device");
+            addInputDeviceMenuItems(inputDeviceMenu);
+
+            // Output device selection menu
+            Menu outputDeviceMenu = new Menu("Output Device");
+            addOutputDeviceMenuItems(outputDeviceMenu);
+
             MenuItem clearHistory = new MenuItem("Clear History");
             clearHistory.addActionListener(e -> {
                 langchainAdapter.clearConversationHistory();
@@ -88,6 +101,10 @@ public class TrayService implements RecorderListener {
             });
 
             popup.add(recordMenuItem);
+            popup.addSeparator();
+            popup.add(inputDeviceMenu);
+            popup.add(outputDeviceMenu);
+            popup.addSeparator();
             popup.add(clearHistory);
             popup.addSeparator();
             popup.add(exit);
@@ -127,6 +144,74 @@ public class TrayService implements RecorderListener {
     public void onRecordingStopped(File wavFile) {
         if (recordMenuItem != null) {
             recordMenuItem.setLabel("Record");
+        }
+    }
+
+    private void addInputDeviceMenuItems(Menu menu) {
+        // Add "System Default" option
+        CheckboxMenuItem defaultItem = new CheckboxMenuItem("System Default");
+        defaultItem.setState(!audioCaptureService.getInputDevice().isPresent());
+        defaultItem.addItemListener(e -> {
+            audioCaptureService.setInputDevice(null);
+            trayIcon.displayMessage("Input Device Changed", "Using system default", TrayIcon.MessageType.INFO);
+        });
+        menu.add(defaultItem);
+        menu.addSeparator();
+
+        // List all available input devices
+        Mixer.Info[] mixers = AudioSystem.getMixerInfo();
+        for (Mixer.Info mixerInfo : mixers) {
+            Mixer mixer = AudioSystem.getMixer(mixerInfo);
+            // Check if this mixer supports recording (has target lines)
+            if (mixer.getTargetLineInfo().length > 0) {
+                String deviceName = mixerInfo.getName();
+                CheckboxMenuItem item = new CheckboxMenuItem(deviceName);
+                
+                // Check if this is the currently selected device
+                item.setState(audioCaptureService.getInputDevice()
+                    .map(current -> deviceName.contains(current))
+                    .orElse(false));
+                
+                item.addItemListener(e -> {
+                    audioCaptureService.setInputDevice(deviceName);
+                    trayIcon.displayMessage("Input Device Changed", deviceName, TrayIcon.MessageType.INFO);
+                });
+                menu.add(item);
+            }
+        }
+    }
+
+    private void addOutputDeviceMenuItems(Menu menu) {
+        // Add "System Default" option
+        CheckboxMenuItem defaultItem = new CheckboxMenuItem("System Default");
+        defaultItem.setState(!ttsPlayer.getOutputDevice().isPresent());
+        defaultItem.addItemListener(e -> {
+            ttsPlayer.setOutputDevice(null);
+            trayIcon.displayMessage("Output Device Changed", "Using system default", TrayIcon.MessageType.INFO);
+        });
+        menu.add(defaultItem);
+        menu.addSeparator();
+
+        // List all available output devices
+        Mixer.Info[] mixers = AudioSystem.getMixerInfo();
+        for (Mixer.Info mixerInfo : mixers) {
+            Mixer mixer = AudioSystem.getMixer(mixerInfo);
+            // Check if this mixer supports playback (has source lines)
+            if (mixer.getSourceLineInfo().length > 0) {
+                String deviceName = mixerInfo.getName();
+                CheckboxMenuItem item = new CheckboxMenuItem(deviceName);
+                
+                // Check if this is the currently selected device
+                item.setState(ttsPlayer.getOutputDevice()
+                    .map(current -> deviceName.contains(current))
+                    .orElse(false));
+                
+                item.addItemListener(e -> {
+                    ttsPlayer.setOutputDevice(deviceName);
+                    trayIcon.displayMessage("Output Device Changed", deviceName, TrayIcon.MessageType.INFO);
+                });
+                menu.add(item);
+            }
         }
     }
 } 

@@ -9,6 +9,7 @@ import javax.sound.sampled.*;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
@@ -38,10 +39,21 @@ public class AudioCaptureService {
     String ttsUrl;
     @ConfigProperty(name = "app.whisper.url", defaultValue = "https://api.openai.com/v1/audio/transcriptions")
     String whisperUrl;
+    @ConfigProperty(name = "app.audio.inputDevice")
+    Optional<String> inputDeviceName;
 
     @PostConstruct
     public void init() {
         // no-op for now
+    }
+
+    public void setInputDevice(String deviceName) {
+        this.inputDeviceName = Optional.ofNullable(deviceName);
+        log.info("Input device changed to: {}", deviceName != null ? deviceName : "system default");
+    }
+
+    public Optional<String> getInputDevice() {
+        return inputDeviceName;
     }
 
     public boolean isRecording() {
@@ -64,36 +76,36 @@ public class AudioCaptureService {
         // List all available mixers/devices
         log.info("Available audio input devices:");
         Mixer.Info[] mixers = AudioSystem.getMixerInfo();
+        Mixer selectedMixer = null;
+        
         for (Mixer.Info mixerInfo : mixers) {
             Mixer mixer = AudioSystem.getMixer(mixerInfo);
             Line.Info[] targetLines = mixer.getTargetLineInfo();
             if (targetLines.length > 0) {
                 log.info("  - {} ({})", mixerInfo.getName(), mixerInfo.getDescription());
+                
+                // Check if this is the configured device
+                if (inputDeviceName.isPresent() && 
+                    mixerInfo.getName().contains(inputDeviceName.get())) {
+                    selectedMixer = mixer;
+                    log.info("  --> Selected (matches configured device)");
+                }
             }
         }
 
         try {
-            line = (TargetDataLine) AudioSystem.getLine(info);
-            
-            // Try to find which mixer this line came from
-            Mixer.Info[] allMixers = AudioSystem.getMixerInfo();
-            String mixerName = "Unknown";
-            for (Mixer.Info mi : allMixers) {
-                Mixer mixer = AudioSystem.getMixer(mi);
-                if (mixer.isLineSupported(info)) {
-                    try {
-                        Line testLine = mixer.getLine(info);
-                        if (testLine.equals(line) || testLine.getClass().equals(line.getClass())) {
-                            mixerName = mi.getName() + " - " + mi.getDescription();
-                            break;
-                        }
-                    } catch (Exception e) {
-                        // Ignore
-                    }
+            // Use selected mixer or default
+            if (selectedMixer != null && selectedMixer.isLineSupported(info)) {
+                line = (TargetDataLine) selectedMixer.getLine(info);
+                log.info("Using configured audio input device: {}", selectedMixer.getMixerInfo().getName());
+            } else {
+                if (inputDeviceName.isPresent()) {
+                    log.warn("Configured input device '{}' not found or not supported, using system default", inputDeviceName.get());
                 }
+                line = (TargetDataLine) AudioSystem.getLine(info);
+                log.info("Using system default audio input device");
             }
             
-            log.info("Using audio device: {}", mixerName);
             log.info("Line info: {}", line.getLineInfo());
             line.open(format);
             log.info("Line opened with buffer size: {} bytes", line.getBufferSize());
