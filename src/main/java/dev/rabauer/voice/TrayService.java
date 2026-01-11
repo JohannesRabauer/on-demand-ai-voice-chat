@@ -22,6 +22,9 @@ public class TrayService implements RecorderListener {
     @Inject
     AudioCaptureService audioCaptureService;
 
+    @Inject
+    LangchainAdapter langchainAdapter;
+
     private TrayIcon trayIcon;
     private MenuItem recordMenuItem;
 
@@ -56,6 +59,11 @@ public class TrayService implements RecorderListener {
                 }
             });
 
+            MenuItem clearHistory = new MenuItem("Clear History");
+            clearHistory.addActionListener(e -> {
+                langchainAdapter.clearConversationHistory();
+            });
+
             MenuItem exit = new MenuItem("Exit");
             exit.addActionListener(e -> {
                 audioCaptureService.stopRecording();
@@ -64,6 +72,7 @@ public class TrayService implements RecorderListener {
             });
 
             popup.add(recordMenuItem);
+            popup.add(clearHistory);
             popup.addSeparator();
             popup.add(exit);
 
@@ -74,6 +83,9 @@ public class TrayService implements RecorderListener {
             audioCaptureService.setListener(this);
             hotkeyManager.start();
 
+            // Show startup notification with hotkey info
+            trayIcon.displayMessage("OnDemand AI Voice", "Ready! Press F8 to start/stop recording", TrayIcon.MessageType.INFO);
+
             log.info("Tray initialized");
         } catch (Exception e) {
             log.error("Failed to init tray", e);
@@ -83,10 +95,8 @@ public class TrayService implements RecorderListener {
     private void toggleRecording() {
         if (audioCaptureService.isRecording()) {
             audioCaptureService.stopRecording();
-            trayIcon.displayMessage("Recording", "Stopped", TrayIcon.MessageType.INFO);
         } else {
             audioCaptureService.startRecording();
-            trayIcon.displayMessage("Recording", "Started", TrayIcon.MessageType.INFO);
         }
     }
 
@@ -95,18 +105,12 @@ public class TrayService implements RecorderListener {
         if (recordMenuItem != null) {
             recordMenuItem.setLabel("Stop");
         }
-        if (trayIcon != null) {
-            trayIcon.displayMessage("Recording", "Started", TrayIcon.MessageType.INFO);
-        }
     }
 
     @Override
     public void onRecordingStopped(File wavFile) {
         if (recordMenuItem != null) {
             recordMenuItem.setLabel("Record");
-        }
-        if (trayIcon != null) {
-            trayIcon.displayMessage("Recording", "Stopped. Saved to: " + wavFile.getName(), TrayIcon.MessageType.INFO);
         }
     }
 } 
