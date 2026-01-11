@@ -1,6 +1,10 @@
+<p align="center">
+  <img src="Icon_cropped.png" alt="On-Demand AI Voice Chat" width="200"/>
+</p>
+
 # On-Demand AI Voice Chat
 
-A Quarkus-based Windows tray application that records audio via global hotkey, streams it to OpenAI Realtime API for transcription, processes responses through a langchain4j adapter, and plays TTS audio back.
+A Quarkus-based Windows tray application that records audio via global hotkey, transcribes it using OpenAI Whisper API, processes responses through GPT-4 with langchain4j, and plays TTS audio back.
 
 ## Features ✅
 

@@ -48,7 +48,23 @@ public class TrayService implements RecorderListener {
 
         try {
             SystemTray tray = SystemTray.getSystemTray();
-            Image image = new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            
+            // Load icon image
+            Image image;
+            try {
+                java.io.File iconFile = new java.io.File("Icon_cropped.png");
+                if (iconFile.exists()) {
+                    image = Toolkit.getDefaultToolkit().getImage("Icon_cropped.png");
+                } else {
+                    // Fallback to blank image if icon not found
+                    image = new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                    log.warn("Icon file not found, using blank image");
+                }
+            } catch (Exception e) {
+                log.warn("Failed to load icon, using blank image", e);
+                image = new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            }
+            
             PopupMenu popup = new PopupMenu();
 
             recordMenuItem = new MenuItem("Record");
