@@ -19,19 +19,28 @@ A Quarkus-based Windows tray application that records audio via global hotkey, t
 
 - Java 21 (Eclipse Temurin recommended)
 - Maven 3.9+
-- OpenAI API key with Realtime API access
+- **OpenAI API key** - Get one from [platform.openai.com](https://platform.openai.com/api-keys)
 - Microphone for audio input
 
 ## Quick Start
 
-1. **Set API Key**:
+**⚠️ Important: Set your OpenAI API key before running!**
+
+1. **Set API Key** (choose one method):
+   
+   **Option A - Environment Variable** (recommended for development):
    ```powershell
-   $env:OPENAI_API_KEY="sk-..."
+   $env:OPENAI_API_KEY="sk-proj-your-actual-api-key-here"
    ```
-   Or edit [`src/main/resources/application.properties`](src/main/resources/application.properties):
+   
+   **Option B - Configuration File** (recommended for distribution):
+   
+   Edit [`src/main/resources/application.properties`](src/main/resources/application.properties):
    ```properties
-   app.ai.apiKey=sk-...
+   app.ai.apiKey=sk-proj-your-actual-api-key-here
    ```
+   
+   Or for portable package: Edit `OnDemandAIVoice/app/application.properties`
 
 2. **Build**:
    ```powershell
@@ -96,23 +105,61 @@ TtsPlayer
     └─ Play via SourceDataLine
 ```
 
+## Building an Installer
+
+You can create a portable Windows package using jpackage (included with JDK 21+):
+
+### Portable Package (Recommended - No Installation Required)
+```powershell
+.\create-portable-package.ps1
+```
+Creates `OnDemandAIVoice-Portable-1.0.0.zip` (~70 MB) containing:
+- Self-contained application with bundled Java runtime
+- OnDemandAIVoice.exe launcher
+- All dependencies included
+- No installation needed - just extract and run!
+
+**Users can:**
+1. Extract the ZIP file anywhere
+2. Double-click `OnDemandAIVoice.exe`
+3. App starts in system tray - press F8 to use
+
+### Windows Installer (Requires WiX Toolset)
+```powershell
+.\create-installer.ps1
+```
+Creates an MSI or EXE installer. **Note:** Requires [WiX Toolset 3.0+](https://wixtoolset.org) to be installed and added to PATH.
+
+### Simple Launcher
+If you don't need distribution, just run:
+```cmd
+run.bat
+```
+Requires Java 21+ installed on the system.
+
+### Manual Installation
+1. Copy the entire project folder to the target location
+2. Ensure `Icon_cropped.png` is in the same directory
+3. Set your OpenAI API key in `application.properties`
+4. Run `java -jar target\quarkus-app\quarkus-run.jar`
+
 ## Next Steps
 
-- [ ] Replace `LangchainAdapter` stub with real langchain4j chains
-- [ ] Add JNativeHook global hotkey (currently stub)
-- [ ] Implement runtime config reload
-- [ ] Package with `jpackage` for Windows installer
-- [ ] Add streaming partial transcripts for live feedback
-- [ ] Support other STT/TTS providers (Google, Azure, local)
+- [x] Global hotkey support (F8)
+- [x] Whisper API transcription
+- [x] LangChain4j integration with GPT-4
+- [x] Context memory support
+- [x] Windows installer scripts
+- [ ] Auto-start on Windows login
 - [ ] Secure API key storage (Windows Credential Manager)
+- [ ] Support other STT/TTS providers (Google, Azure, local)
 
 ## Troubleshooting
 
 **No transcript received?**
-- Check logs for WebSocket connection errors
-- Verify `OPENAI_API_KEY` is set
-- Ensure Realtime API access is enabled in your OpenAI account
-- Check message schema matches current OpenAI Realtime format
+- Check logs for errors during Whisper API call
+- Verify `OPENAI_API_KEY` is set correctly
+- Ensure audio is being recorded (check temp WAV file)
 
 **TTS playback fails?**
 - Verify `app.tts.url` points to correct endpoint
@@ -120,8 +167,13 @@ TtsPlayer
 - Inspect logs for HTTP status codes
 
 **Hotkey not working?**
-- JNativeHook integration is stubbed—currently use tray menu
-- Implement full JNativeHook listener to enable F8 toggle
+- JNativeHook requires accessibility permissions on some systems
+- Check logs for "Global hotkey F8 registered successfully"
+- Try running as administrator if needed
+
+**Icon not showing in tray?**
+- Ensure `Icon_cropped.png` is in the application directory
+- Check logs for icon loading warnings
 
 ## License
 

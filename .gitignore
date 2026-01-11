@@ -4,3 +4,7 @@ target/
 *.tmp
 /.idea
 /.vscode
+/installer/lib
+/installer
+/OnDemandAIVoice
+OnDemandAIVoice-Portable-1.0.0.zip
