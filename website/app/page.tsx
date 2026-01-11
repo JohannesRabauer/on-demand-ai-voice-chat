@@ -150,7 +150,7 @@ export default function Home() {
 
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
               <motion.a
-                href="https://github.com/rabauerprojekt/on-demand-ai-voice-chat/releases/latest"
+                href="https://github.com/JohannesRabauer/on-demand-ai-voice-chat/releases/latest"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-full overflow-hidden shadow-2xl transition-all hover:shadow-purple-500/50 hover:scale-105"
@@ -167,7 +167,7 @@ export default function Home() {
               </motion.a>
 
               <motion.a
-                href="https://github.com/rabauerprojekt/on-demand-ai-voice-chat"
+                href="https://github.com/JohannesRabauer/on-demand-ai-voice-chat"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-white border-2 border-white/30 rounded-full hover:bg-white/10 transition-all backdrop-blur-sm"
@@ -301,7 +301,7 @@ export default function Home() {
           </p>
           
           <motion.a
-            href="https://github.com/rabauerprojekt/on-demand-ai-voice-chat/releases/latest"
+            href="https://github.com/JohannesRabauer/on-demand-ai-voice-chat/releases/latest"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center px-10 py-5 text-xl font-bold text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-full shadow-2xl hover:shadow-purple-500/50 transition-all"
@@ -325,7 +325,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto text-center text-gray-400">
           <div className="flex justify-center gap-8 mb-6">
             <a
-              href="https://github.com/rabauerprojekt/on-demand-ai-voice-chat"
+              href="https://github.com/JohannesRabauer/on-demand-ai-voice-chat"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-white transition-colors"
@@ -333,7 +333,7 @@ export default function Home() {
               GitHub
             </a>
             <a
-              href="https://github.com/rabauerprojekt/on-demand-ai-voice-chat#readme"
+              href="https://github.com/JohannesRabauer/on-demand-ai-voice-chat#readme"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-white transition-colors"
@@ -341,7 +341,7 @@ export default function Home() {
               Documentation
             </a>
             <a
-              href="https://github.com/rabauerprojekt/on-demand-ai-voice-chat/releases"
+              href="https://github.com/JohannesRabauer/on-demand-ai-voice-chat/releases"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-white transition-colors"
