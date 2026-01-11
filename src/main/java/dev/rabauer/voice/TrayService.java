@@ -1,8 +1,9 @@
 package dev.rabauer.voice;
 
-import jakarta.annotation.PostConstruct;
+import io.quarkus.runtime.StartupEvent;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -11,7 +12,7 @@ import java.io.File;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@Singleton
+@ApplicationScoped
 public class TrayService implements RecorderListener {
     private static final Logger log = LoggerFactory.getLogger(TrayService.class);
 
@@ -24,8 +25,14 @@ public class TrayService implements RecorderListener {
     private TrayIcon trayIcon;
     private MenuItem recordMenuItem;
 
-    @PostConstruct
-    public void init() {
+    void onStart(@Observes StartupEvent ev) {
+        log.info("TrayService starting...");
+        // Run on AWT Event Dispatch Thread
+        EventQueue.invokeLater(this::initTray);
+    }
+
+    private void initTray() {
+        log.info("Initializing system tray on EDT...");
         if (!Boolean.parseBoolean(System.getProperty("enable.tray", "true"))) {
             log.info("Tray disabled via system property");
             return;

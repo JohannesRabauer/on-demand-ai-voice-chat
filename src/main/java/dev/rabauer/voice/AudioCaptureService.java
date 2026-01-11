@@ -3,6 +3,7 @@ package dev.rabauer.voice;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import javax.sound.sampled.*;
 import java.io.*;
@@ -24,6 +25,17 @@ public class AudioCaptureService {
 
     @Inject
     RealtimeOpenAIClient realtimeClient;
+    @Inject
+    LangchainAdapter langchainAdapter;
+    @Inject
+    TtsPlayer ttsPlayer;
+
+    @ConfigProperty(name = "openai.api.key")
+    String apiKey;
+    @ConfigProperty(name = "app.voice", defaultValue = "alloy")
+    String voice;
+    @ConfigProperty(name = "app.tts.url", defaultValue = "https://api.openai.com/v1/audio/speech")
+    String ttsUrl;
 
     @PostConstruct
     public void init() {
@@ -44,13 +56,27 @@ public class AudioCaptureService {
             return;
         }
 
-        AudioFormat format = new AudioFormat(16000f, 16, 1, true, false);
+        AudioFormat format = new AudioFormat(24000f, 16, 1, true, false);
         DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
+
+        // List all available mixers/devices
+        log.info("Available audio input devices:");
+        Mixer.Info[] mixers = AudioSystem.getMixerInfo();
+        for (Mixer.Info mixerInfo : mixers) {
+            Mixer mixer = AudioSystem.getMixer(mixerInfo);
+            Line.Info[] targetLines = mixer.getTargetLineInfo();
+            if (targetLines.length > 0) {
+                log.info("  - {} ({})", mixerInfo.getName(), mixerInfo.getDescription());
+            }
+        }
 
         try {
             line = (TargetDataLine) AudioSystem.getLine(info);
+            log.info("Using audio device: {}", line.getLineInfo());
             line.open(format);
+            log.info("Line opened with buffer size: {} bytes", line.getBufferSize());
             line.start();
+            log.info("Line started, capturing audio...");
 
             recording.set(true);
             if (listener != null) {
@@ -59,9 +85,20 @@ public class AudioCaptureService {
             // Connect to OpenAI Realtime and prepare to receive final transcript
             try {
                 realtimeClient.connect().join();
+                // Wait for session to be fully initialized before sending audio
+                Thread.sleep(500);
+                log.info("Session initialized, ready to stream audio");
                 realtimeClient.setOnFinalTranscript(text -> {
                     log.info("Final transcript received: {}", text);
-                    // Next step: hand to langchain4j adapter and TTS
+                    // Hand transcript to langchain adapter
+                    String reply = langchainAdapter.processTranscript(text);
+                    // Request TTS as WAV and play
+                    try {
+                        byte[] wav = ttsPlayer.requestTtsWav(reply, voice, apiKey, ttsUrl);
+                        ttsPlayer.playWav(wav);
+                    } catch (Exception e1) {
+                        log.error("TTS playback failed", e1);
+                    }
                 });
             } catch (Exception e) {
                 log.error("Failed to connect Realtime client", e);
@@ -70,15 +107,32 @@ public class AudioCaptureService {
 
             captureThread = new Thread(() -> {
                 byte[] buffer = new byte[4096];
+                int totalBytes = 0;
+                int nonZeroChunks = 0;
                 try {
                     while (recording.get()) {
                         int read = line.read(buffer, 0, buffer.length);
                         if (read > 0) {
+                            totalBytes += read;
                             out.write(buffer, 0, read);
+                            
+                            // Check if buffer contains non-zero data
+                            boolean hasData = false;
+                            for (int i = 0; i < read; i++) {
+                                if (buffer[i] != 0) {
+                                    hasData = true;
+                                    break;
+                                }
+                            }
+                            if (hasData) {
+                                nonZeroChunks++;
+                            }
+                            
                             // Stream audio chunk to OpenAI Realtime
                             realtimeClient.appendPcm16(buffer, read);
                         }
                     }
+                    log.info("Captured {} bytes total, {} chunks had non-zero audio data", totalBytes, nonZeroChunks);
 
                     // Commit the audio buffer and request a response
                     realtimeClient.commitAndCreateResponse();

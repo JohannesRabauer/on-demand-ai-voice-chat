@@ -30,11 +30,13 @@ public class RealtimeOpenAIClient {
 
     private volatile WebSocket ws;
     private Consumer<String> onFinalTranscript = s -> {};
+    private int audioChunkCount = 0;
 
     public CompletableFuture<Void> connect() {
         if (apiKey == null || apiKey.isBlank()) {
             return CompletableFuture.failedFuture(new IllegalStateException("Missing openai.api.key"));
         }
+        audioChunkCount = 0;
         HttpClient client = HttpClient.newHttpClient();
         log.info("Connecting to OpenAI Realtime: {}", realtimeUrl);
         return client.newWebSocketBuilder()
@@ -43,7 +45,7 @@ public class RealtimeOpenAIClient {
                     @Override
                     public void onOpen(WebSocket webSocket) {
                         ws = webSocket;
-                        log.info("Realtime WebSocket opened");
+                        log.info("Realtime WebSocket opened, ready to receive audio");
                         webSocket.request(1);
                     }
 
@@ -52,13 +54,55 @@ public class RealtimeOpenAIClient {
                         String json = data.toString();
                         try {
                             JsonNode n = mapper.readTree(json);
-                            // Adjust parsing based on actual schema returned by OpenAI
-                            if (n.has("type") && "transcript.final".equals(n.get("type").asText()) && n.has("text")) {
-                                String text = n.get("text").asText();
-                                log.info("Final transcript: {}", text);
-                                onFinalTranscript.accept(text);
-                            } else {
-                                log.debug("Realtime event: {}", json);
+                            log.info("Realtime event: {}", json);
+                            
+                            // Parse transcript events - with server VAD the transcript comes in response output
+                            if (n.has("type")) {
+                                String eventType = n.get("type").asText();
+                                
+                                // Handle response.output_item.added (contains transcription from user input)
+                                if ("response.output_item.added".equals(eventType)) {
+                                    JsonNode item = n.get("item");
+                                    if (item != null && "message".equals(item.path("type").asText())) {
+                                        JsonNode content = item.get("content");
+                                        if (content != null && content.isArray()) {
+                                            for (JsonNode c : content) {
+                                                if ("input_text".equals(c.path("type").asText())) {
+                                                    String text = c.path("text").asText();
+                                                    if (!text.isEmpty()) {
+                                                        log.info("User input transcript: {}", text);
+                                                        onFinalTranscript.accept(text);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                // Also check for conversation.item.created with role=user
+                                else if ("conversation.item.created".equals(eventType)) {
+                                    JsonNode item = n.get("item");
+                                    if (item != null && "user".equals(item.path("role").asText())) {
+                                        JsonNode content = item.get("content");
+                                        if (content != null && content.isArray()) {
+                                            for (JsonNode c : content) {
+                                                if ("input_audio".equals(c.path("type").asText())) {
+                                                    String transcript = c.path("transcript").asText();
+                                                    if (!transcript.isEmpty()) {
+                                                        log.info("User audio transcript: {}", transcript);
+                                                        onFinalTranscript.accept(transcript);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                // Speech detection events
+                                else if ("input_audio_buffer.speech_started".equals(eventType)) {
+                                    log.info("Speech detected in audio buffer");
+                                }
+                                else if ("input_audio_buffer.speech_stopped".equals(eventType)) {
+                                    log.info("Speech stopped in audio buffer");
+                                }
                             }
                         } catch (Exception e) {
                             log.warn("Failed to parse realtime message: {}", json, e);
@@ -86,7 +130,10 @@ public class RealtimeOpenAIClient {
 
     public void appendPcm16(byte[] buffer, int length) {
         WebSocket socket = this.ws;
-        if (socket == null) return;
+        if (socket == null) {
+            log.warn("WebSocket is null, cannot send audio");
+            return;
+        }
         byte[] copy = new byte[length];
         System.arraycopy(buffer, 0, copy, 0, length);
         String b64 = Base64.getEncoder().encodeToString(copy);
@@ -95,7 +142,16 @@ public class RealtimeOpenAIClient {
                     .put("type", "input_audio_buffer.append")
                     .put("audio", b64)
                     .toString();
+            
+            // Log first message to verify format
+            if (audioChunkCount == 0) {
+                log.info("First audio chunk message (truncated): {}", msg.substring(0, Math.min(200, msg.length())));
+                log.info("First 10 audio bytes: {}", java.util.Arrays.toString(java.util.Arrays.copyOf(copy, Math.min(10, length))));
+            }
+            audioChunkCount++;
+            
             socket.sendText(msg, true);
+            log.info("Sent {} bytes of audio (chunk #{})", length, audioChunkCount);
         } catch (Exception e) {
             log.warn("Failed to send audio chunk", e);
         }
