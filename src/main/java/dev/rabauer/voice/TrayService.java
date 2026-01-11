@@ -32,6 +32,9 @@ public class TrayService implements RecorderListener {
 
     private TrayIcon trayIcon;
     private MenuItem recordMenuItem;
+    private Image idleIcon;
+    private Image recordingIcon;
+    private Image busyIcon;
 
     void onStart(@Observes StartupEvent ev) {
         log.info("TrayService starting...");
@@ -54,21 +57,10 @@ public class TrayService implements RecorderListener {
         try {
             SystemTray tray = SystemTray.getSystemTray();
             
-            // Load icon image
-            Image image;
-            try {
-                java.io.File iconFile = new java.io.File("Icon_cropped.png");
-                if (iconFile.exists()) {
-                    image = Toolkit.getDefaultToolkit().getImage("Icon_cropped.png");
-                } else {
-                    // Fallback to blank image if icon not found
-                    image = new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);
-                    log.warn("Icon file not found, using blank image");
-                }
-            } catch (Exception e) {
-                log.warn("Failed to load icon, using blank image", e);
-                image = new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);
-            }
+            // Load icon images
+            idleIcon = loadIcon("Icon_small.png");
+            recordingIcon = loadIcon("Icon_small_rec.png");
+            busyIcon = loadIcon("Icon_small_busy.png");
             
             PopupMenu popup = new PopupMenu();
 
@@ -109,7 +101,7 @@ public class TrayService implements RecorderListener {
             popup.addSeparator();
             popup.add(exit);
 
-            trayIcon = new TrayIcon(image, "OnDemand AI Voice", popup);
+            trayIcon = new TrayIcon(idleIcon, "OnDemand AI Voice", popup);
             trayIcon.setImageAutoSize(true);
             tray.add(trayIcon);
 
@@ -135,15 +127,59 @@ public class TrayService implements RecorderListener {
 
     @Override
     public void onRecordingStarted() {
-        if (recordMenuItem != null) {
-            recordMenuItem.setLabel("Stop");
-        }
+        EventQueue.invokeLater(() -> {
+            if (recordMenuItem != null) {
+                recordMenuItem.setLabel("Stop");
+            }
+            if (trayIcon != null) {
+                log.info("Switching to recording icon");
+                trayIcon.setImage(recordingIcon);
+            }
+        });
     }
 
     @Override
     public void onRecordingStopped(File wavFile) {
-        if (recordMenuItem != null) {
-            recordMenuItem.setLabel("Record");
+        EventQueue.invokeLater(() -> {
+            if (recordMenuItem != null) {
+                recordMenuItem.setLabel("Record");
+            }
+            // Don't change icon here - processing will start immediately
+        });
+    }
+
+    @Override
+    public void onProcessingStarted() {
+        EventQueue.invokeLater(() -> {
+            if (trayIcon != null) {
+                log.info("Switching to busy icon");
+                trayIcon.setImage(busyIcon);
+            }
+        });
+    }
+
+    @Override
+    public void onProcessingFinished() {
+        EventQueue.invokeLater(() -> {
+            if (trayIcon != null) {
+                log.info("Switching to idle icon");
+                trayIcon.setImage(idleIcon);
+            }
+        });
+    }
+
+    private Image loadIcon(String filename) {
+        try {
+            java.io.File iconFile = new java.io.File(filename);
+            if (iconFile.exists()) {
+                return Toolkit.getDefaultToolkit().getImage(filename);
+            } else {
+                log.warn("Icon file {} not found, using blank image", filename);
+                return new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load icon {}, using blank image", filename, e);
+            return new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);
         }
     }
 

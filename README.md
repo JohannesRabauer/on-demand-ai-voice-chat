@@ -14,12 +14,17 @@ Pre-built portable package with bundled Java runtime - just extract and run! No 
 
 ## Features ✅
 
-- **Background Service**: Runs as Windows tray icon with Record/Exit menu
+- **Background Service**: Runs as Windows tray icon with context menu
+- **Visual Status Indicators**: 
+  - 🟢 Idle state (Icon_small.png)
+  - 🔴 Recording (Icon_small_rec.png)  
+  - 🟡 Processing - transcribing/generating/playing (Icon_small_busy.png)
 - **Global Hotkey**: F8 (configurable) toggles recording on/off
-- **Streaming STT**: PCM16 audio streamed to OpenAI Realtime WebSocket API
-- **LLM Integration**: Transcripts processed via langchain4j adapter (currently stub—add your chain)
-- **TTS Playback**: Response synthesized via OpenAI TTS and played through speakers
-- **Configuration**: External `application.properties` for API keys, voice, prompts
+- **Audio Device Selection**: Choose input/output devices via tray menu
+- **Whisper Transcription**: Fast, accurate speech-to-text via OpenAI Whisper API
+- **GPT-4 Integration**: Intelligent responses via langchain4j with conversation memory
+- **TTS Playback**: Natural voice synthesis via OpenAI TTS
+- **Configuration**: External `application.properties` for API keys, voice, prompts, context memory
 
 ## Requirements
 

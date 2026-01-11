@@ -18,6 +18,16 @@ public class TestAudioCapture {
             public void onRecordingStopped(java.io.File wavFile) {
                 System.out.println("[TEST] Recording stopped, saved to: " + wavFile.getAbsolutePath());
             }
+
+            @Override
+            public void onProcessingStarted() {
+                System.out.println("[TEST] Processing started");
+            }
+
+            @Override
+            public void onProcessingFinished() {
+                System.out.println("[TEST] Processing finished");
+            }
         };
 
         service.setListener(listener);

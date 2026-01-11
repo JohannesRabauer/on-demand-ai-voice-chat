@@ -156,6 +156,16 @@ public class AudioCaptureService {
                     log.info("Recording saved to {}", tmp);
 
                     try {
+                        // Notify listener that recording stopped
+                        if (listener != null) {
+                            listener.onRecordingStopped(tmp.toFile());
+                        }
+
+                        // Notify processing started (transcription, AI, TTS)
+                        if (listener != null) {
+                            listener.onProcessingStarted();
+                        }
+
                         // Transcribe using Whisper API
                         log.info("Transcribing audio with Whisper API...");
                         String transcript = transcribeWithWhisper(tmp);
@@ -169,11 +179,16 @@ public class AudioCaptureService {
                         byte[] audioData = ttsPlayer.requestTtsWav(ttsUrl, apiKey, llmResponse, voice);
                         ttsPlayer.playWav(audioData);
 
+                        // Notify processing finished
                         if (listener != null) {
-                            listener.onRecordingStopped(tmp.toFile());
+                            listener.onProcessingFinished();
                         }
                     } catch (Exception e) {
                         log.error("Error processing audio with Whisper/LLM/TTS", e);
+                        // Notify processing finished even on error
+                        if (listener != null) {
+                            listener.onProcessingFinished();
+                        }
                     }
 
                 } catch (IOException e) {
