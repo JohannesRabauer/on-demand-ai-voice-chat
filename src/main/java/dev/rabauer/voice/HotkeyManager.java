@@ -43,6 +43,10 @@ public class HotkeyManager implements NativeKeyListener {
         targetKeyCode = mapHotkeyToKeyCode(hotkey);
     }
 
+    public String getHotkey() {
+        return hotkey;
+    }
+
     public void start() {
         if (registered) {
             log.warn("HotkeyManager already started");

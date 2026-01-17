@@ -109,7 +109,9 @@ public class TrayService implements RecorderListener {
             hotkeyManager.start();
 
             // Show startup notification with hotkey info
-            trayIcon.displayMessage("OnDemand AI Voice", "Ready! Press F8 to start/stop recording", TrayIcon.MessageType.INFO);
+            trayIcon.displayMessage("OnDemand AI Voice", 
+                "Ready! Press " + hotkeyManager.getHotkey() + " to start/stop recording", 
+                TrayIcon.MessageType.INFO);
 
             log.info("Tray initialized");
         } catch (Exception e) {
@@ -134,6 +136,7 @@ public class TrayService implements RecorderListener {
             if (trayIcon != null) {
                 log.info("Switching to recording icon");
                 trayIcon.setImage(recordingIcon);
+                trayIcon.setToolTip("OnDemand AI Voice - Recording...");
             }
         });
     }
@@ -154,6 +157,7 @@ public class TrayService implements RecorderListener {
             if (trayIcon != null) {
                 log.info("Switching to busy icon");
                 trayIcon.setImage(busyIcon);
+                trayIcon.setToolTip("OnDemand AI Voice - Processing...");
             }
         });
     }
@@ -164,6 +168,7 @@ public class TrayService implements RecorderListener {
             if (trayIcon != null) {
                 log.info("Switching to idle icon");
                 trayIcon.setImage(idleIcon);
+                trayIcon.setToolTip("OnDemand AI Voice - Ready (Press " + hotkeyManager.getHotkey() + ")");
             }
         });
     }
