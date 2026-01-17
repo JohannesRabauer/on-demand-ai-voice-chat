@@ -170,13 +170,28 @@ public class TrayService implements RecorderListener {
 
     private Image loadIcon(String filename) {
         try {
+            // First try to load from classpath resources (bundled in JAR)
+            String resourcePath = "/icons/" + filename;
+            java.io.InputStream stream = getClass().getResourceAsStream(resourcePath);
+            if (stream != null) {
+                Image image = javax.imageio.ImageIO.read(stream);
+                stream.close();
+                if (image != null) {
+                    log.info("Loaded icon {} from classpath", filename);
+                    return image;
+                }
+            }
+            
+            // Fallback: try to load from working directory (for external file support)
             java.io.File iconFile = new java.io.File(filename);
             if (iconFile.exists()) {
-                return Toolkit.getDefaultToolkit().getImage(filename);
-            } else {
-                log.warn("Icon file {} not found, using blank image", filename);
-                return new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                log.info("Loaded icon {} from file: {}", filename, iconFile.getAbsolutePath());
+                return javax.imageio.ImageIO.read(iconFile);
             }
+            
+            log.warn("Icon {} not found in classpath or at file path: {}, using blank image", 
+                    filename, iconFile.getAbsolutePath());
+            return new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);
         } catch (Exception e) {
             log.warn("Failed to load icon {}, using blank image", filename, e);
             return new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);

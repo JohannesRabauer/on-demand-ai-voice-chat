@@ -39,8 +39,11 @@ if ($LASTEXITCODE -ne 0) {
 # Step 3: Copy resources and create portable package
 Write-Host "`n[3/3] Creating portable package..." -ForegroundColor Yellow
 
-# Copy icon to app folder
+# Copy icons to app folder (as backup, they're also bundled in the JAR)
 Copy-Item "Icon_cropped.png" "$appImage\" -ErrorAction SilentlyContinue
+Copy-Item "src\main\resources\icons\Icon_small.png" "$appImage\" -ErrorAction SilentlyContinue
+Copy-Item "src\main\resources\icons\Icon_small_rec.png" "$appImage\" -ErrorAction SilentlyContinue
+Copy-Item "src\main\resources\icons\Icon_small_busy.png" "$appImage\" -ErrorAction SilentlyContinue
 
 # Create launcher script
 @"

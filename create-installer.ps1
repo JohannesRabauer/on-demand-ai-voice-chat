@@ -30,6 +30,11 @@ New-Item -ItemType Directory -Path $installerDir | Out-Null
 Copy-Item -Recurse "target/quarkus-app/*" "$installerDir/"
 Copy-Item $iconPath "$installerDir/" -ErrorAction SilentlyContinue
 
+# Copy tray icons (as backup, they're also bundled in the JAR)
+Copy-Item "src\main\resources\icons\Icon_small.png" "$installerDir\" -ErrorAction SilentlyContinue
+Copy-Item "src\main\resources\icons\Icon_small_rec.png" "$installerDir\" -ErrorAction SilentlyContinue
+Copy-Item "src\main\resources\icons\Icon_small_busy.png" "$installerDir\" -ErrorAction SilentlyContinue
+
 # Step 4: Create installer with jpackage
 Write-Host "`n[4/4] Creating Windows installer..." -ForegroundColor Yellow
 
