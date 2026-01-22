@@ -32,7 +32,14 @@ public class TtsPlayer {
     public byte[] requestTtsWav(String ttsUrl, String apiKey, String text, String voice) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
         // OpenAI TTS API requires: model, input, voice, and optionally response_format
-        String payload = "{\"model\":\"tts-1\",\"input\":\"" + text.replace("\"", "\\\"") + "\",\"voice\":\"" + voice + "\",\"response_format\":\"wav\"}";
+        // Use Jackson ObjectMapper for proper JSON encoding to handle newlines, quotes, and special characters
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var payloadNode = mapper.createObjectNode();
+        payloadNode.put("model", "tts-1");
+        payloadNode.put("input", text);
+        payloadNode.put("voice", voice);
+        payloadNode.put("response_format", "wav");
+        String payload = mapper.writeValueAsString(payloadNode);
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(ttsUrl))
                 .header("Authorization", "Bearer " + apiKey)
